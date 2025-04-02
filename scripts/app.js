@@ -9,6 +9,8 @@ import {
   onSnapshot,
   query,
   orderBy,
+  updateDoc,
+  getDoc,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -31,77 +33,22 @@ const postStatus = document.getElementById("post-status");
 const firebaseStatus = document.getElementById("firebase-status");
 
 const userId = "user-" + Math.random().toString(36).substr(2, 9);
-let typingTimeout;
 
-function showTypingIndicator(userName) {
-  const typingIndicator = document.getElementById("typing-indicator");
-  if (typingIndicator) {
-    const typingText = typingIndicator.querySelector(".typing-text");
-    if (typingText) {
-      typingText.textContent = `${userName} is typing...`;
-    }
-    typingIndicator.style.display = "flex";
-  }
+async function checkBanStatus(userId) {
+  const userRef = doc(db, "bannedUsers", userId);
+  const userSnap = await getDoc(userRef);
+  return userSnap.exists() && userSnap.data().banned;
 }
 
-function hideTypingIndicator() {
-  const typingIndicator = document.getElementById("typing-indicator");
-  if (typingIndicator) {
-    typingIndicator.style.display = "none";
-  }
+async function banUser(userId) {
+  const userRef = doc(db, "bannedUsers", userId);
+  await setDoc(userRef, { banned: true });
 }
 
-async function updateTypingStatus(isTyping) {
-  const typingRef = doc(db, "typing", userId);
-  const userName = authorInput.value.trim() || "Anonymous";
-  try {
-    await setDoc(
-      typingRef,
-      {
-        isTyping,
-        userId,
-        userName,
-        lastTyped: serverTimestamp(),
-      },
-      { merge: true }
-    );
-  } catch (error) {
-    console.error("Error updating typing status:", error);
-  }
+async function unbanUser(userId) {
+  const userRef = doc(db, "bannedUsers", userId);
+  await updateDoc(userRef, { banned: false });
 }
-
-function handleTypingStart() {
-  const userName = authorInput.value.trim() || "Anonymous";
-  showTypingIndicator(userName);
-  clearTimeout(typingTimeout);
-  updateTypingStatus(true);
-
-  typingTimeout = setTimeout(() => {
-    handleTypingEnd();
-  }, 2000);
-}
-
-function handleTypingEnd() {
-  hideTypingIndicator();
-  updateTypingStatus(false);
-}
-if (messageInput) {
-  messageInput.addEventListener("input", handleTypingStart);
-  messageInput.addEventListener("blur", handleTypingEnd);
-}
-
-const typingRef = collection(db, "typing");
-onSnapshot(typingRef, (snapshot) => {
-  snapshot.docChanges().forEach((change) => {
-    if (change.type === "modified") {
-      const data = change.doc.data();
-      if (data.isTyping && data.userId !== userId) {
-        showTypingIndicator(data.userName);
-        setTimeout(hideTypingIndicator, 2000);
-      }
-    }
-  });
-});
 
 messageForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -115,14 +62,21 @@ messageForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  const isBanned = await checkBanStatus(userId);
+  if (isBanned) {
+    postStatus.textContent = "You are banned from posting messages.";
+    postStatus.style.color = "red";
+    return;
+  }
+
   try {
     postStatus.textContent = "Posting...";
     postStatus.style.color = "blue";
-    handleTypingEnd();
 
     await addDoc(collection(db, "messages"), {
       text: messageText,
       author: author,
+      userId: userId,
       timestamp: serverTimestamp(),
     });
 
@@ -138,56 +92,32 @@ messageForm.addEventListener("submit", async (e) => {
 });
 
 const q = query(collection(db, "messages"), orderBy("timestamp"));
-onSnapshot(
-  q,
-  (snapshot) => {
-    updateConnectionStatus(true);
-    messageContainer.innerHTML = "";
-
-    snapshot.forEach((doc) => {
-      const msg = doc.data();
-      const time = msg.timestamp?.toDate() || new Date();
-      const formattedTime = time.toLocaleString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        weekday: "short",
-      });
-
-      const messageEl = document.createElement("div");
-      messageEl.className = "message";
-      messageEl.innerHTML = `
-        <div class="message-avatar">${msg.author.charAt(0).toUpperCase()}</div>
-        <div class="message-content">
-          <div class="message-header">
-            <span class="message-author">${msg.author}</span>
-            <span class="message-time">${formattedTime}</span>
-          </div>
-          <p class="message-text">${msg.text}</p>
+onSnapshot(q, (snapshot) => {
+  messageContainer.innerHTML = "";
+  snapshot.forEach((doc) => {
+    const msg = doc.data();
+    const messageEl = document.createElement("div");
+    messageEl.className = "message";
+    messageEl.innerHTML = `
+      <div class="message-avatar">${msg.author.charAt(0).toUpperCase()}</div>
+      <div class="message-content">
+        <div class="message-header">
+          <span class="message-author">${msg.author}</span>
+          <button onclick="toggleBanStatus('${msg.userId}')">${msg.banned ? "Unban" : "Ban"}</button>
         </div>
-      `;
-      messageContainer.appendChild(messageEl);
-    });
+        <p class="message-text">${msg.text}</p>
+      </div>
+    `;
+    messageContainer.appendChild(messageEl);
+  });
+});
 
-    const messageCount = document.querySelector(".message-count");
-    if (messageCount) {
-      messageCount.textContent = `${snapshot.size} message${
-        snapshot.size !== 1 ? "s" : ""
-      }`;
-    }
-  },
-  (error) => {
-    updateConnectionStatus(false);
-    console.error("Firestore error:", error);
-  }
-);
-
-function updateConnectionStatus(connected) {
-  if (connected) {
-    firebaseStatus.innerHTML = '<i class="fas fa-check-circle"></i> Connected';
-    firebaseStatus.style.color = "green";
+async function toggleBanStatus(userId) {
+  const isBanned = await checkBanStatus(userId);
+  if (isBanned) {
+    await unbanUser(userId);
   } else {
-    firebaseStatus.innerHTML =
-      '<i class="fas fa-exclamation-circle"></i> Disconnected';
-    firebaseStatus.style.color = "red";
+    await banUser(userId);
   }
+  location.reload();
 }
