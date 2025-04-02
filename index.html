@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Public Message Board</title>
     <link rel="stylesheet" href="css/styles.css">
-    <script src="js/main.js"></script>
+    <script type="module" src="scripts/app.js"></script>
 </head>
 <body>
     <header>
@@ -21,9 +21,9 @@
     <div class="page-container">
         <aside class="message-input-section">
             <h2>Post a Message</h2>
-            <form class="message-form">
-                <input type="text" id="name" name="name" placeholder="Your name" required>
-                <textarea id="message" name="message" placeholder="Write your message here..." required></textarea>
+            <form id="message-form" class="message-form">
+                <input type="text" id="author-input" name="name" placeholder="Your name" required>
+                <textarea id="message-input" name="message" placeholder="Write your message here..." required></textarea>
                 <div class="message-options">
                     <div class="color-picker">
                         <label for="textColor">Text Color:</label>
@@ -32,12 +32,13 @@
                     <button type="submit">Post Message</button>
                 </div>
             </form>
+            <p id="post-status"></p> <!-- Lägg till detta element -->
         </aside>
 
         <main>
             <div class="messages-container">
                 <h1>Public Message Board</h1>
-                <div id="messages">
+                <div id="message-container">
                     <!-- Messages will be displayed here -->
                 </div>
             </div>
@@ -48,4 +49,4 @@
         <p>&copy; 2024 Public Message Board. All rights reserved.</p>
     </footer>
 </body>
-</html> 
+</html>
