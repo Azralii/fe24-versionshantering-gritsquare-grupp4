@@ -143,4 +143,4 @@ document.getElementById('freeze-button').addEventListener('click', function() {
     button.innerText = 'Sub-zero Temperature ❆';
   }
   subZero = !subZero;
-});
+})
